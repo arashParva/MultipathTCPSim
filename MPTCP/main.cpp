@@ -22,7 +22,7 @@ long numberOfTimeSlot=(timeSimulation/timeSlot);
 unsigned short int maxNumberSubflow=5;
 unsigned short int maxNumberNode=10;
 unsigned short int maxNumberInterface;
-unsigned short int maxNumberFlow;
+unsigned short int maxNumberFlow=3;
 unsigned long maxDataRate=1000000;
 float probabilityInterface=0.5;
 mt19937 initRandomEngine();
@@ -125,7 +125,7 @@ void Graph::bridge()
     int *low = new int[V];
     int *parent = new int[V];
 
-    // Initialize parent and visited arrays
+    // Initia4lize parent and visited arrays
     for (int i = 0; i < V; i++)
     {
         parent[i] = 0;
@@ -174,7 +174,7 @@ class TransportLayer{
 public:
 
     vector<Flow> flows;
-    unsigned short int numberFlow;
+    unsigned short int numberFlow=0;
     void generateSubflow(Node &node);
     void appToTrnaspor(Node &node);
     void flowToSubflow(Node &node);
@@ -263,20 +263,23 @@ void randomTopology(){
     ///Initilize the Flow and Subflows
     for(int k=0;k<vectorNodes.size();k++){
         unsigned short temp=randomIntNumber(maxNumberFlow);
-        while(temp==0){
-            temp=randomIntNumber(maxNumberFlow);
+        if(temp==0){
+            temp=1;
         }
         vectorNodes.at(k).tcpLayer.numberFlow=temp;
         for(int i=0;i<temp;i++){
             Flow flow;
             flow.transDestFlow.first=k;
             flow.transDestFlow.second=randomIntNumber(vectorNodes.size());
-            while(k==flow.transDestFlow.second){
-                flow.transDestFlow.second=randomIntNumber(vectorNodes.size());
+            if(k!=flow.transDestFlow.second){
+                vectorNodes.at(k).tcpLayer.flows.push_back(flow);
+                cout<<"Node "<<k<<"has a flow("<<k<<","<<flow.transDestFlow.second<<")"<<"\n";
             }
-            vectorNodes.at(k).tcpLayer.flows.push_back(flow);
 
         }
+
+    }
+
 
         /*unsigned short int numSubFlow=randomIntNumber(maxNumberSubflow);
         if(numSubFlow==0){
@@ -285,12 +288,12 @@ void randomTopology(){
         //vectorNodes.at(k).flow.numberSubflow=numSubFlow;
         //cout<<"numSubflow node "<<k<<": is : "<<numSubFlow<<"\n";
         //for(int j=0;j<numSubFlow;j++){
-            queue<Packet> subFlowQueue;
-            vectorNodes.at(k).flow.subflows.push_back(subFlowQueue);
+            /*queue<Packet> subFlowQueue;
+            vectorNodes.at(k).flow.subflows.push_back(subFlowQueue);*/
         //}
 
 
-    }
+
     ///Initilize Routing Table]
     //inistalRoutingTable(nodeNumber);
     ///Show Main Route Table
@@ -396,16 +399,21 @@ void randomTopology(){
         ///Application Layer Generate the Packets
         for(int t=0;t<vectorNodes.size();t++){
             vectorNodes.at(t).appLayer.generatePacket(numPackets,vectorNodes.at(t),r);
-            //vectorNodes.at(t).flow.flowSize=vectorNodes.at(t).flow.mainFlow.size();
         }
         ///transferring packets from Application Layer to the Transport Layer
-        for(int i=0;i<vectorNodes.size();i++){
-            vectorNodes.at(i).tcpLayer.appToTrnaspor(vectorNodes.at(i));
-        }
+        for(int u=0;u<vectorNodes.size();u++){
+            if(!vectorNodes.at(u).appLayer.applicationQueue.empty()){
+                vectorNodes.at(u).tcpLayer.appToTrnaspor(vectorNodes.at(u));
+            }
 
+
+        }
         ///Transferring Packets from flows to the Subflows;
         for(int n=0;n<vectorNodes.size();n++){
+            if(vectorNodes.at(n).tcpLayer.numberFlow!=0){
                 vectorNodes.at(n).tcpLayer.flowToSubflow(vectorNodes.at(n));
+            }
+
         }
 
         ///Tansport the Packets to the Network Layer
@@ -929,28 +937,33 @@ void TransportLayer::generateSubflow(Node &node){
         }
 }
 void TransportLayer::appToTrnaspor(Node &node){
-    if(!node.appLayer.applicationQueue.empty()){
         while(!node.appLayer.applicationQueue.empty()){
-            for(int i=0;i<node.tcpLayer.numberFlow;i++){
-                    Packet packet=node.appLayer.applicationQueue.front();
-                    node.appLayer.applicationQueue.pop();
-                    packet.destinationAddress=node.tcpLayer.flows.at(i).transDestFlow.second;
-                    packet.packetFlow.first=node.id;
-                    packet.packetFlow.second=node.tcpLayer.flows.at(i).transDestFlow.second;
-                    packet.percentSend=0;
-                    packet.sequenceNumber=node.tcpLayer.flows.at(i).lastPacket;
-                    node.tcpLayer.flows.at(i).lastPacket++;
-                    packet.sourceAddress=node.id;
-                    node.tcpLayer.flows.at(i).mainFlow.push(packet);
+            if(node.tcpLayer.numberFlow!=0){
+                for(int i=0;i<node.tcpLayer.numberFlow;i++){
+                    if(!node.appLayer.applicationQueue.empty()){
+                        Packet packet=node.appLayer.applicationQueue.front();
+                        node.appLayer.applicationQueue.pop();
+                        packet.destinationAddress=node.tcpLayer.flows.at(i).transDestFlow.second;
+                        packet.packetFlow.first=node.id;
+                        packet.packetFlow.second=node.tcpLayer.flows.at(i).transDestFlow.second;
+                        packet.percentSend=0;
+                        packet.sequenceNumber=node.tcpLayer.flows.at(i).lastPacket;
+                        node.tcpLayer.flows.at(i).lastPacket++;
+                        packet.sourceAddress=node.id;
+                        node.tcpLayer.flows.at(i).mainFlow.push(packet);
+                    }
+                }
             }
+
         }
-    }
-    for(int z=0;z<node.tcpLayer.numberFlow;z++){
-        node.tcpLayer.flows.at(z).flowSize=node.tcpLayer.flows.at(z).mainFlow.size();
-    }
-    for(int i=0;i<flows.size();i++){
-        cout<<"Node "<<node.id<<" in the flow "<<i<<" has "<<flows.at(i).mainFlow.size()<<" Packets"<<"\n";
-    }
+
+        for(int z=0;z<node.tcpLayer.numberFlow;z++){
+         node.tcpLayer.flows.at(z).flowSize=node.tcpLayer.flows.at(z).mainFlow.size();
+        }
+        for(int i=0;i<node.tcpLayer.flows.size();i++){
+          cout<<"Node "<<node.id<<" in the flow "<<i<<" has "<<flows.at(i).mainFlow.size()<<" Packets"<<"\n";
+        }
+
 
 }
 void TransportLayer::flowToSubflow(Node &node){
